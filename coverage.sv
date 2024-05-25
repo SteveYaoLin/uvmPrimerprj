@@ -13,29 +13,12 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 */
-module top;
+module coverage(tinyalu_bfm bfm);
+  import tinyalu_pkg::*;
 
-   typedef enum bit[2:0] {no_op  = 3'b000,
-                          add_op = 3'b001, 
-                          and_op = 3'b010,
-                          xor_op = 3'b011,
-                          mul_op = 3'b100,
-                          rst_op = 3'b111} operation_t;
    byte         unsigned        A;
    byte         unsigned        B;
-   bit          clk;
-   bit          reset_n;
-   wire [2:0]   op;
-   bit          start;
-   wire         done;
-   wire [15:0]  result;
    operation_t  op_set;
-   integer i;
-   assign op = op_set;
-
-   tinyalu DUT (.A, .B, .clk, .op, .reset_n, .start, .done, .result);
-
-
 
    covergroup op_cov;
 
@@ -51,7 +34,6 @@ module top;
 
          bins twoops[] = ([add_op:mul_op] [* 2]);
          bins manymult = (mul_op [* 3:5]);
-
 
       }
 
@@ -107,117 +89,27 @@ module top;
 
       }
 
-   endgroup
+endgroup
 
-
-
-
-   initial begin
-      clk = 0;
-      forever begin
-         #10;
-         clk = ~clk;
-      end
-   end
-   
    op_cov oc;
    zeros_or_ones_on_ops c_00_FF;
 
-   initial begin : coverage
-   
+   initial begin : coverage_block
       oc = new();
       c_00_FF = new();
-   
-      forever begin @(negedge clk);
+      forever begin  : sampling_block
+         @(negedge bfm.clk);
+         A = bfm.A;
+         B = bfm.B;
+         op_set = bfm.op_set;
          oc.sample();
          c_00_FF.sample();
-      end
-   end : coverage
+      end : sampling_block
+   end : coverage_block
    
-
-   function operation_t get_op();
-      bit [2:0] op_choice;
-      op_choice = $random;
-      case (op_choice)
-        3'b000 : return no_op;
-        3'b001 : return add_op;
-        3'b010 : return and_op;
-        3'b011 : return xor_op;
-        3'b100 : return mul_op;
-        3'b101 : return no_op;
-        3'b110 : return rst_op;
-        3'b111 : return rst_op;
-      endcase // case (op_choice)
-   endfunction : get_op
-
-   function byte get_data();
-      bit [1:0] zero_ones;
-      zero_ones = $random;
-      if (zero_ones == 2'b00)
-        return 8'h00;
-      else if (zero_ones == 2'b11)
-        return 8'hFF;
-      else
-        return $random;
-   endfunction : get_data
-
-   always @(posedge done) begin : scoreboard
-      shortint predicted_result;
-      #1;
-      $display("scoreboard start at %t!\n",$realtime);
-      case (op_set)
-        add_op: predicted_result = A + B;
-        and_op: predicted_result = A & B;
-        xor_op: predicted_result = A ^ B;
-        mul_op: predicted_result = A * B;
-      endcase // case (op_set)
       
-      if ((op_set != no_op) && (op_set != rst_op))
-        if (predicted_result != result)
-          $error ("FAILED: A: %0h  B: %0h  op: %s result: %0h",
-                  A, B, op_set.name(), result);
-         
+endmodule : coverage
 
-   end : scoreboard
-   
-
-   
-   
-   initial begin : tester
-      reset_n = 1'b0;
-      i=0;
-      @(negedge clk);
-      @(negedge clk);
-      reset_n = 1'b1;
-      start = 1'b0;
-      repeat (10) begin
-         @(negedge clk);
-         op_set = get_op();
-         A = get_data();
-         B = get_data();
-         start = 1'b1;
-         case (op_set) // handle the start signal
-           no_op: begin 
-              @(posedge clk);
-              start = 1'b0;
-           end
-           rst_op: begin 
-              reset_n = 1'b0;
-              start = 1'b0;
-              @(negedge clk);
-              reset_n = 1'b1;
-           end
-           default: begin 
-              wait(done);
-              start = 1'b0;
-           end
-         endcase // case (op_set)
-         i++;
-         $display(" repeat %d , at %t !\n" , i,$realtime);
-      end
-      $stop;
-   end : tester
-endmodule : top
 
 
 
